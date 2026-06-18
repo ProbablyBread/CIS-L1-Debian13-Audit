@@ -3,6 +3,7 @@
 import subprocess
 from pathlib import Path
 import os
+import stat
 import re
 from datetime import timedelta
 from datetime import datetime
@@ -135,6 +136,45 @@ def Check_5_4_2_4():
 
 def Check_5_4_2_5():
     print("Running audit for 5.4.2.5...")
+
+    flag = False
+
+    # find a way to simulate root shell to PATH when logging in since sudo forces environment variables
+    rootPath = subprocess.run("sudo su - root -c \"printenv PATH\"", capture_output=True, shell=True).stdout
+    # this doesn't work
+    exit(0)
+
+    for path in rootPath.split(":"):
+        if path == "":
+            flag = True
+            print(f"Empty path detected in {rootPath}")
+        elif path == ".":
+            flag = True
+            print(f"Current directory \".\" detected in {rootPath}")
+        else:
+            p = Path(path)
+
+            if not p.exists():
+                flag = True
+                print(f"Invalid directory {path} detected in {rootPath}")
+            else:
+                st = p.stat()
+                mode = st.st_mode
+
+                if not st.st_uid == 0 or not st.st_gid == 0:
+                    flag = True
+                    print(f"Directory {path} is not owned by root in {rootPath}")
+                elif not stat.S_ISDIR(mode):
+                    flag = True
+                    print(f"Directory {path} is not a valid path in {rootPath}")
+                elif stat.S_IMODE(mode) > 0o755:
+                    flag = True
+                    print(f"Directory {path} is overly permissive (mode = {oct(mode).split('o')[1]}) in {rootPath}")
+
+    if not flag:
+        print("Audit passed for 5.4.2.5.\n")
+    else:
+        print("Audit failed for 5.4.2.5.\n")
 
 def Check_7_1_11():
     print("Running audit for 7.1.11...")
