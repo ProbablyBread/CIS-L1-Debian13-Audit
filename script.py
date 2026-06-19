@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import json
 import subprocess
 from pathlib import Path
 import os
@@ -47,7 +48,7 @@ def Check_5_4_1_6():
         
         if int(changeDate) > currentDate:
             flag = True
-            print(f"/etc/shadow: {shadowLine[0]} has last password change date at {epochDate + timedelta(int(shadowLine[2]))}")
+            print(f"/etc/shadow: {shadowLine[0]} has last password change date in the future at {epochDate + timedelta(int(shadowLine[2]))}")
 
     if not flag:
         print("Audit passed for 5.4.1.6.\n")
@@ -139,37 +140,35 @@ def Check_5_4_2_5():
 
     flag = False
 
-    # find a way to simulate root shell to PATH when logging in since sudo forces environment variables
-    rootPath = subprocess.run("sudo su - root -c \"printenv PATH\"", capture_output=True, shell=True).stdout
-    # this doesn't work
-    exit(0)
+    rootPath = subprocess.run("sudo su - root -c \"printenv PATH\"", capture_output=True, shell=True)
+    rootPath = rootPath.stdout.decode().strip()
 
     for path in rootPath.split(":"):
         if path == "":
             flag = True
-            print(f"Empty path detected in {rootPath}")
+            print(f"Empty path detected")
         elif path == ".":
             flag = True
-            print(f"Current directory \".\" detected in {rootPath}")
+            print(f"Current directory detected")
         else:
             p = Path(path)
 
             if not p.exists():
                 flag = True
-                print(f"Invalid directory {path} detected in {rootPath}")
+                print(f"Invalid directory {path} detected")
             else:
                 st = p.stat()
                 mode = st.st_mode
 
                 if not st.st_uid == 0 or not st.st_gid == 0:
                     flag = True
-                    print(f"Directory {path} is not owned by root in {rootPath}")
+                    print(f"Directory {path} is not owned by root")
                 elif not stat.S_ISDIR(mode):
                     flag = True
-                    print(f"Directory {path} is not a valid path in {rootPath}")
+                    print(f"Directory {path} is not a valid path")
                 elif stat.S_IMODE(mode) > 0o755:
                     flag = True
-                    print(f"Directory {path} is overly permissive (mode = {oct(mode).split('o')[1]}) in {rootPath}")
+                    print(f"Directory {path} is overly permissive (mode = {oct(mode).split('o')[1]})")
 
     if not flag:
         print("Audit passed for 5.4.2.5.\n")
@@ -179,8 +178,44 @@ def Check_5_4_2_5():
 def Check_7_1_11():
     print("Running audit for 7.1.11...")
 
+    flag = False
+    
+    excludedTypes = ["nfs", "proc", "cifs", "smb", "vfat", "iso9660", "efivarfs", "selinuxfs", "ncpfs"]
+    excludedDirs = ["/run", "/tmp", "/var/tmp"]
+
+    mounts = subprocess.run("findmnt --json -Dkeno fstype,target", shell=True, capture_output=True)
+    mounts = json.loads(mounts.stdout.decode())
+
+    for mount in mounts["filesystems"]:
+        top = Path("/")
+
+        # loop through all included mounts
+        if mount["fstype"] not in excludedTypes and not any(mount["target"].startswith(dir) for dir in excludedDirs):
+            top = Path(mount["target"])
+
+            for path in top.rglob("*"):
+                if not any(str(path).startswith(d) for d in excludedDirs):
+                    try:
+                        mode = path.stat().st_mode
+                        # check for world writable files
+                        if path.is_file() and bool(mode & stat.S_IWOTH):
+                            flag = True
+                            collectedFiles.append(path)
+                        # check for world writable directories without sticky bit
+                        if path.is_dir() and bool(mode & stat.S_IWOTH) and not bool(mode & stat.S_ISVTX):
+                            flag = True
+                            collectedDirs.append(path)
+                    except FileNotFoundError:
+                        print(f"WARNING: Unable to follow symlink to {path}")
+
+    if not flag:
+        print("Audit passed for 7.1.11.\n")
+    else:
+        print("Audit failed for 7.1.11.\n")
+
 def Check_7_1_12():
     print("Running audit for 7.1.12...")
+
 
 def Check_7_2_3():
     print("Running audit for 7.2.3...")
