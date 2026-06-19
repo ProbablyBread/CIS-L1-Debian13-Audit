@@ -2,12 +2,13 @@
 
 import json
 import subprocess
-from pathlib import Path
 import os
+import sys
 import stat
 import re
 from datetime import timedelta
 from datetime import datetime
+from pathlib import Path
 
 def Check_5_2_5():
     print("Running audit for 5.2.5...")
@@ -181,32 +182,39 @@ def Check_7_1_11():
     flag = False
     
     excludedTypes = ["nfs", "proc", "cifs", "smb", "vfat", "iso9660", "efivarfs", "selinuxfs", "ncpfs"]
-    excludedDirs = ["/run", "/tmp", "/var/tmp"]
+    excludedRootDirs = {"/run", "/tmp", "/var/tmp", "/sys", "/snap", "/boot/efi", "/proc"}
+    excludedGlobDirs = ["/containers/storage/", "/containerd/", "/kubelet/"]
 
     mounts = subprocess.run("findmnt --json -Dkeno fstype,target", shell=True, capture_output=True)
     mounts = json.loads(mounts.stdout.decode())
 
+    # cache additional directories to ignore
     for mount in mounts["filesystems"]:
-        top = Path("/")
+        if mount["fstype"] in excludedTypes:
+            excludedRootDirs.add(mount["target"])
 
-        # loop through all included mounts
-        if mount["fstype"] not in excludedTypes and not any(mount["target"].startswith(dir) for dir in excludedDirs):
-            top = Path(mount["target"])
+    top = Path("/")
 
-            for path in top.rglob("*"):
-                if not any(str(path).startswith(d) for d in excludedDirs):
-                    try:
-                        mode = path.stat().st_mode
-                        # check for world writable files
-                        if path.is_file() and bool(mode & stat.S_IWOTH):
-                            flag = True
-                            collectedFiles.append(path)
-                        # check for world writable directories without sticky bit
-                        if path.is_dir() and bool(mode & stat.S_IWOTH) and not bool(mode & stat.S_ISVTX):
-                            flag = True
-                            collectedDirs.append(path)
-                    except FileNotFoundError:
-                        print(f"WARNING: Unable to follow symlink to {path}")
+    # loop through all files and directories under /
+    for p in top.glob("**"):
+        # if directory doesn't start with excludedRootDirs, or it doesn't contain excludedGlobDirs
+        # since this is using str.find(), if string is NOT found it's -1, hence > -1 for found strings
+        if not any(str(p).startswith(d) for d in excludedRootDirs) and not any((str(p) + "/").find(g) > -1 for g in excludedGlobDirs):
+            try: 
+                # follow symlinks, but flag broken ones
+                mode = p.stat().st_mode
+
+                # if is file and is world writable
+                if p.is_file() and bool(mode & stat.S_IWOTH):
+                    flag = True
+                    print(f"World writable file: {p} ({oct(mode).split('o')[1]})")
+
+                # if is dir and is world writable without sticky bit set
+                if p.is_dir() and bool(mode & stat.S_IWOTH) and not bool(mode & stat.S_ISVTX):
+                    flag = True
+                    print(f"World writable dir without sticky bit: {p} ({oct(mode).split('o')[1]})")
+            except FileNotFoundError:
+                print(f"WARNING: Broken symlink at {p}")
 
     if not flag:
         print("Audit passed for 7.1.11.\n")
@@ -215,7 +223,6 @@ def Check_7_1_11():
 
 def Check_7_1_12():
     print("Running audit for 7.1.12...")
-
 
 def Check_7_2_3():
     print("Running audit for 7.2.3...")
@@ -242,6 +249,19 @@ def Check_7_2_10():
     print("Running audit for 7.1.18...")
 
 if __name__ == "__main__":
+    # print slowdown warning for any Python version < 3.13
+    if sys.version_info.major <= 3 and sys.version_info.minor < 13:
+        print("WARNING: Python versions <= 3.12.X will experience significant slow downs during the checks for 7.1.11 and 7.1.12.")
+        print("You are encouraged to upgrade your Python version before using this script.")
+        selection = ""
+
+        while not re.match(r"[yYnN]", selection):
+            selection = input("Acknowledge to continue (Y/N): ")
+
+            if re.match(r"[Nn]", selection):
+                print("Exiting.")
+                exit(0)
+
     if os.geteuid() == 0: 
         Check_5_2_5()
         Check_5_4_1_6()
