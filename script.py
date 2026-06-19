@@ -196,30 +196,35 @@ def Check_7_1_11():
     top = Path("/")
 
     # loop through all files and directories under /
-    ################ this is still borked
-    ################ my logic isn't logicing
     for p in top.glob("**"):
         # if overall path doesn't start with excludedRootDirs
         dirCheck = not any(str(p).startswith(d) for d in excludedRootDirs)
 
-        # only perform this check if p is a directory
-        # since this is using str.find(), if string is NOT found it's -1, hence > -1 for found strings
-        globCheck = p.is_dir() and not any((str(p) + "/").find(g) > -1 for g in excludedGlobDirs)
+        if p.is_dir() and dirCheck:
+            # since this is using str.find()
+            # if string is NOT found it's -1
+            # hence, only run this if it's not an excluded directory
+            if any((str(p) + "/").find(g) == -1 for g in excludedGlobDirs)
+                try: 
+                    # follow symlinks, but flag broken ones
+                    mode = p.stat().st_mode
 
-        if dirCheck or globCheck:
+                    # if is world writable without sticky bit set
+                    if bool(mode & stat.S_IWOTH) and not bool(mode & stat.S_ISVTX):
+                        flag = True
+                        print(f"World writable dir without sticky bit: {p} ({oct(mode).split('o')[-1]})")
+                except FileNotFoundError:
+                    print(f"WARNING: Broken symlink at {p}")
+
+        elif p.is_file() and dirCheck:
             try: 
                 # follow symlinks, but flag broken ones
                 mode = p.stat().st_mode
 
-                # if is file and is world writable
-                if p.is_file() and bool(mode & stat.S_IWOTH):
+                # if is world writable
+                if bool(mode & stat.S_IWOTH):
                     flag = True
-                    print(f"World writable file: {p} ({oct(mode).split('o')[1]})")
-
-                # if is dir and is world writable without sticky bit set
-                if p.is_dir() and bool(mode & stat.S_IWOTH) and not bool(mode & stat.S_ISVTX):
-                    flag = True
-                    print(f"World writable dir without sticky bit: {p} ({oct(mode).split('o')[1]})")
+                    print(f"World writable file: {p} ({oct(mode).split('o')[-1]})")
             except FileNotFoundError:
                 print(f"WARNING: Broken symlink at {p}")
 
