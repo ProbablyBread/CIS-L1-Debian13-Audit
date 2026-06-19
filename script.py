@@ -196,12 +196,16 @@ def Check_7_1_11():
     top = Path("/")
 
     # loop through all files and directories under /
+    ################ this is still borked
+    ################ my logic isn't logicing
     for p in top.glob("**"):
+        # if overall path doesn't start with excludedRootDirs
         dirCheck = not any(str(p).startswith(d) for d in excludedRootDirs)
+
+        # only perform this check if p is a directory
+        # since this is using str.find(), if string is NOT found it's -1, hence > -1 for found strings
         globCheck = p.is_dir() and not any((str(p) + "/").find(g) > -1 for g in excludedGlobDirs)
 
-        # if directory doesn't start with excludedRootDirs, or it doesn't contain excludedGlobDirs
-        # since this is using str.find(), if string is NOT found it's -1, hence > -1 for found strings
         if dirCheck or globCheck:
             try: 
                 # follow symlinks, but flag broken ones
