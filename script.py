@@ -197,9 +197,12 @@ def Check_7_1_11():
 
     # loop through all files and directories under /
     for p in top.glob("**"):
+        dirCheck = not any(str(p).startswith(d) for d in excludedRootDirs)
+        globCheck = p.is_dir() and not any((str(p) + "/").find(g) > -1 for g in excludedGlobDirs)
+
         # if directory doesn't start with excludedRootDirs, or it doesn't contain excludedGlobDirs
         # since this is using str.find(), if string is NOT found it's -1, hence > -1 for found strings
-        if not any(str(p).startswith(d) for d in excludedRootDirs) and not any((str(p) + "/").find(g) > -1 for g in excludedGlobDirs):
+        if dirCheck or globCheck:
             try: 
                 # follow symlinks, but flag broken ones
                 mode = p.stat().st_mode
