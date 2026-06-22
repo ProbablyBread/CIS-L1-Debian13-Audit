@@ -10,6 +10,12 @@ from datetime import timedelta
 from datetime import datetime
 from pathlib import Path
 
+def IsExcludedGlobDir(path, excludedGlobDirs):
+    # since this is using str.find()
+    # if string is NOT found it's -1
+    # returns true for strings that are found
+    return any((str(path) + "/").find(g) > -1 for g in excludedGlobDirs)
+
 def Check_5_2_5():
     print("Running audit for 5.2.5...")
 
@@ -201,10 +207,8 @@ def Check_7_1_11():
         dirCheck = not any(str(p).startswith(d) for d in excludedRootDirs)
 
         if p.is_dir() and dirCheck:
-            # since this is using str.find()
-            # if string is NOT found it's -1
-            # hence, only run this if it's not an excluded directory
-            if any((str(p) + "/").find(g) == -1 for g in excludedGlobDirs)
+            # just check if directory is excluded
+            if not IsExcludedGlobDir(p, excludedGlobDirs): 
                 try: 
                     # follow symlinks, but flag broken ones
                     mode = p.stat().st_mode
@@ -217,16 +221,18 @@ def Check_7_1_11():
                     print(f"WARNING: Broken symlink at {p}")
 
         elif p.is_file() and dirCheck:
-            try: 
-                # follow symlinks, but flag broken ones
-                mode = p.stat().st_mode
+            # get parent directory and check if it's excluded
+            if not IsExcludedGlobDir(p.parent, excludedGlobDirs):
+                try: 
+                    # follow symlinks, but flag broken ones
+                    mode = p.stat().st_mode
 
-                # if is world writable
-                if bool(mode & stat.S_IWOTH):
-                    flag = True
-                    print(f"World writable file: {p} ({oct(mode).split('o')[-1]})")
-            except FileNotFoundError:
-                print(f"WARNING: Broken symlink at {p}")
+                    # if is world writable
+                    if bool(mode & stat.S_IWOTH):
+                        flag = True
+                        print(f"World writable file: {p} ({oct(mode).split('o')[-1]})")
+                except FileNotFoundError:
+                    print(f"WARNING: Broken symlink at {p}")
 
     if not flag:
         print("Audit passed for 7.1.11.\n")
