@@ -12,5 +12,8 @@ if __name__ == "__main__":
         # if 1 argument, run only the specified check
         elif len(sys.argv) == 2:
             Checks.RunCheck(sys.argv[1])
+        else:
+            print("Unable to parse arguments.")
+            print("Provide 0 arguments to run all audits, or 1 argument to run the specified audit.")
     else:
         print("Please run this script as root.")
