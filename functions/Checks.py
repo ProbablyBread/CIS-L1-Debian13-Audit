@@ -10,6 +10,7 @@ import stat
 import re
 import pwd
 import grp
+import hashlib
 from datetime import timedelta
 from datetime import datetime
 from pathlib import Path
@@ -374,13 +375,6 @@ def Check_7_1_12():
 def Check_7_1_13():
     print("Running audit for 7.1.13...")
 
-    # install debsums if it doesn't exist
-    try:
-        _ = subprocess.run(["/usr/bin/debsums", "--help"], capture_output=True)
-    except FileNotFoundError:
-        print("Installing debsums...")
-        _ = subprocess.run(["/usr/bin/apt", "install", "debsums", "-y"], capture_output=True)
-
     stickyBitList = []
     excludedRootDirs = Helpers.GetDirExclusionsWithOptions()
 
@@ -395,17 +389,15 @@ def Check_7_1_13():
 
         # get files with SUID and SGID bits
         for file in filenames:
-            try:
-                filepath = os.path.join(path, file)
-                mode = os.stat(filepath).st_mode
+            filepath = os.path.join(path, file)
+            mode = os.lstat(filepath).st_mode # don't follow symlinks
 
-                if bool(mode & stat.S_ISUID):
-                    stickyBitList.append(["SUID", filepath])
-                if bool(mode & stat.S_ISGID):
-                    stickyBitList.append(["SGID", filepath])
-
-            except FileNotFoundError:
-                print(f"WARNING: Broken symlink at {filepath}")
+            # stickyBitList[i][0] - SUID or SGID
+            # stickyBitList[i][1] - full file path
+            if bool(mode & stat.S_ISUID):
+                stickyBitList.append(["SUID", filepath])
+            if bool(mode & stat.S_ISGID):
+                stickyBitList.append(["SGID", filepath])
 
     # loop through all files
     for file in stickyBitList:
@@ -413,10 +405,19 @@ def Check_7_1_13():
         dpkgSource = subprocess.run(f"dpkg -S {file[1]}", shell=True, capture_output=True).stdout.decode()
         dpkgSource = dpkgSource.split(":")[0]
 
-        # check against debsums
-        if subprocess.run(f"debsums {dpkgSource}", shell=True, capture_output=True).returncode != 0:
+        # calculate md5sum for file
+        with open(file[1], 'rb') as f:
+            digest = hashlib.file_digest(f, "md5").hexdigest()
+
+        # check against /var/lib/dpkg/info/<dpkgSource>.md5sums
+        with open(f"/var/lib/dpkg/info/{dpkgSource}.md5sums", 'r') as f:
+            sums = f.read()
+
+        # md5sum format matches <digest>  path/to/binary 
+        # hence, slice first / off filepath when searching
+        if not re.findall(rf"{digest}\s+{file[1][1:]}", sums):
             flag = True
-            print(f"{file[0]} file {file[1]} failed checksum")
+            print(f"md5sum does not match for {file[0]} file - {digest}: {file[1]}")
 
     if not flag:
         print("Audit passed for 7.1.13.\n")
