@@ -19,6 +19,20 @@ def GetDirExclusions():
 
     return excludedRootDirs, excludedGlobDirs
 
+def IsEOF(stream):
+    currIndex = stream.tell()
+    stream.readline()
+    nextIndex = stream.tell()
+
+    # if no more to read
+    if currIndex == nextIndex:
+        return True
+    # if more to read
+    else:
+        # reset to current pos
+        stream.seek(currIndex)
+        return False
+
 def ParseDeb822(file):
     counter = 0
     stanzas = {}
@@ -26,25 +40,22 @@ def ParseDeb822(file):
 
     with open(file, 'r') as f:
         while True:
+            # read line from file
             line = f.readline()
 
             # append to lines[] if not a comment or newline
-            if re.match(r"^[^#\r\n].*", line):
+            if re.match(r"^[^#\n].*", line):
                 lines.append(line)
 
-            # test if newline
-            try:
-                if line == '\n' and lines[0].strip() != "":
-                    stanzas[counter] = lines # store
-                    lines = [] # create new array 
-                    counter += 1
-            except IndexError:
-                pass
-
-            # test if EOF and exit loop
-            if not line:
+            # continue to next loop if line is a newline
+            if line == '\n' and len(lines) > 0:
                 stanzas[counter] = lines
+                lines = []
                 counter += 1
-                break
 
-    return stanzas
+            # if EOF, return
+            if IsEOF(f):
+                if len(lines) > 0:
+                    stanzas[counter] = lines
+
+                return stanzas
