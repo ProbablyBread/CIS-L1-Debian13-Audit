@@ -62,7 +62,8 @@ def RunAll():
 def Check_1_2_1_1():
     print("Running audit for 1.2.1.1...")
 
-    flag = False
+    auditFlag = False
+    signedByFlag = False
 
     p = Path("/etc/apt")
 
@@ -72,21 +73,37 @@ def Check_1_2_1_1():
             with open(file) as f:
                 lines = f.readlines()
 
-            for line in lines:
-                line = line.lower().strip()
-
-                if not re.match(r"^[^#\r\n].*signed-by.*$", line):
-                    flag = True
-                    print(f"Missing Signed-By in {file}")
+            for i, line in enumerate(lines):
+                if not re.match(r"(?i)^[^#\r\n].*signed-by.*$", line):
+                    auditFlag = True
+                    print(f"Missing Signed-By at line {i + 1} in {file}")
 
         # handle .sources files (deb822)
-        if str(file).endswith("debian-backports.sources"):
+        if str(file).endswith(".sources"):
             stanzas = Helpers.ParseDeb822(file)
-            # check for either
-            #   missing signed-by
-            #   empty signed-by
 
-    if not flag:
+            # loop through each stanza
+            for i in stanzas:
+                # reset flag for each stanza
+                signedByFlag = False
+
+                # loop through each line in the stanza
+                for line in stanzas.get(i):
+                    # check if signed-by exists
+                    if re.match(r"(?i)^signed-by.*$", line):
+                        signedByFlag = True
+                        
+                        # check if signed-by has a key
+                        if line.split(":")[1].strip() == "":
+                            auditFlag = True
+                            print(f"Empty Signed-By for stanza {i + 1} in {file}")
+
+                # if signed-by is missing
+                if not signedByFlag:
+                    auditFlag = True
+                    print(f"Missing Signed-By for stanza {i + 1} in {file}")
+
+    if not auditFlag:
         print("Audit passed for 1.2.1.1.\n")
     else:
         print("Audit failed for 1.2.1.1.\n")

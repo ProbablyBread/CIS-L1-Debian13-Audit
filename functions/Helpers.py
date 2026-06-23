@@ -2,6 +2,7 @@
 
 import subprocess
 import json
+import re
 
 def GetDirExclusions():
     excludedTypes = ["nfs", "proc", "cifs", "smb", "vfat", "iso9660", "efivarfs", "selinuxfs", "ncpfs"]
@@ -26,17 +27,24 @@ def ParseDeb822(file):
     with open(file, 'r') as f:
         while True:
             line = f.readline()
-            lines.append(line)
+
+            # append to lines[] if not a comment or newline
+            if re.match(r"^[^#\r\n].*", line):
+                lines.append(line)
 
             # test if newline
-            if line == '\n':
-                stanzas[counter] = lines
-                lines.clear()
-                counter += 1
+            try:
+                if line == '\n' and lines[0].strip() != "":
+                    stanzas[counter] = lines # store
+                    lines = [] # create new array 
+                    counter += 1
+            except IndexError:
+                pass
 
             # test if EOF and exit loop
             if not line:
                 stanzas[counter] = lines
+                counter += 1
                 break
 
     return stanzas
