@@ -65,7 +65,7 @@ def ParseDeb822(file):
             if re.match(r"^[^#\n].*", line):
                 lines.append(line)
 
-            # continue to next loop if line is a newline
+            # append to stanzas dict if line is a newline and block of lines > 0
             if line == '\n' and len(lines) > 0:
                 stanzas[counter] = lines
                 lines = []
