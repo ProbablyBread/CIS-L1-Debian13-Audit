@@ -84,7 +84,7 @@ def Check_1_2_1_1():
 
             # loop through each stanza
             for i in stanzas:
-                # reset flag for each stanza
+                # reset flag
                 signedByFlag = False
 
                 # loop through each line in the stanza
@@ -93,7 +93,7 @@ def Check_1_2_1_1():
                     if re.match(r"(?i)^signed-by.*$", line):
                         signedByFlag = True
                         
-                        # check if signed-by has a key
+                        # check if signed-by has a pgp key
                         if line.split(":")[1].strip() == "":
                             auditFlag = True
                             print(f"Empty Signed-By for stanza {i + 1} in {file}")
@@ -374,9 +374,49 @@ def Check_7_1_12():
 def Check_7_1_13():
     print("Running audit for 7.1.13...")
 
+    # install debsums if it doesn't exist
+    try:
+        _ = subprocess.run(["/usr/bin/debsums", "--help"], capture_output=True)
+    except FileNotFoundError:
+        print("Installing debsums...")
+        _ = subprocess.run(["/usr/bin/apt", "install", "debsums", "-y"], capture_output=True)
+
+    stickyBitList = []
+    excludedRootDirs = Helpers.GetDirExclusionsWithOptions()
+
     flag = False
 
-    excludedRootDirs, excludedGlobDirs = Helpers.GetDirExclusions()
+    # walk everything from /
+    for path, dirnames, filenames in os.walk("/", topdown=True):
+        # except excluded dirs
+        if any(path.startswith(d) for d in excludedRootDirs):
+            dirnames.clear()
+            continue
+
+        # get files with SUID and SGID bits
+        for file in filenames:
+            try:
+                filepath = os.path.join(path, file)
+                mode = os.stat(filepath).st_mode
+
+                if bool(mode & stat.S_ISUID):
+                    stickyBitList.append(["SUID", filepath])
+                if bool(mode & stat.S_ISGID):
+                    stickyBitList.append(["SGID", filepath])
+
+            except FileNotFoundError:
+                print(f"WARNING: Broken symlink at {filepath}")
+
+    # loop through all files
+    for file in stickyBitList:
+        # get package from dpkg -S
+        dpkgSource = subprocess.run(f"dpkg -S {file[1]}", shell=True, capture_output=True).stdout.decode()
+        dpkgSource = dpkgSource.split(":")[0]
+
+        # check against debsums
+        if subprocess.run(f"debsums {dpkgSource}", shell=True, capture_output=True).returncode != 0:
+            flag = True
+            print(f"{file[0]} file {file[1]} failed checksum")
 
     if not flag:
         print("Audit passed for 7.1.13.\n")

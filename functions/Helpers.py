@@ -4,6 +4,19 @@ import subprocess
 import json
 import re
 
+def IsEOF(stream):
+    currIndex = stream.tell()
+    stream.read(1) # try to read 1 char
+
+    # if no more to read
+    if currIndex == stream.tell():
+        return True
+    # if more to read
+    else:
+        # reset to current pos
+        stream.seek(currIndex)
+        return False
+
 def GetDirExclusions():
     excludedTypes = ["nfs", "proc", "cifs", "smb", "vfat", "iso9660", "efivarfs", "selinuxfs", "ncpfs"]
     excludedRootDirs = {"/run", "/tmp", "/var/tmp", "/sys", "/snap", "/boot/efi", "/proc"}
@@ -19,18 +32,24 @@ def GetDirExclusions():
 
     return excludedRootDirs, excludedGlobDirs
 
-def IsEOF(stream):
-    currIndex = stream.tell()
-    stream.read(1) # try to read 1 char
+def GetDirExclusionsWithOptions():
+    excludedTypes = ["nfs", "proc", "cifs", "smb", "vfat", "iso9660", "efivarfs", "selinuxfs", "ncpfs"]
+    excludedRootDirs = {"/run/user", "/proc"}
+    excludedOptions = ["noexec", "nosuid"]
 
-    # if no more to read
-    if currIndex == stream.tell():
-        return True
-    # if more to read
-    else:
-        # reset to current pos
-        stream.seek(currIndex)
-        return False
+    mounts = subprocess.run("findmnt --json -Dkeno fstype,target,options", shell=True, capture_output=True)
+    mounts = json.loads(mounts.stdout.decode())
+
+    # cache additional directories to ignore
+    for mount in mounts["filesystems"]:
+        options = mount["options"].split(",")
+
+        if mount["fstype"] in excludedTypes:
+            excludedRootDirs.add(mount["target"])
+        elif "noexec" in options or "nosuid" in options: 
+            excludedRootDirs.add(mount["target"])
+
+    return excludedRootDirs
 
 def ParseDeb822(file):
     counter = 0
