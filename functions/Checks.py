@@ -37,7 +37,7 @@ def RunCheck(argument):
         case "7.2.9": Check_7_2_9()
         case "7.2.10": Check_7_2_10()
         case "All" | "all": RunAll()
-        case _: print("Invalid check.\n")
+        case _: print("Invalid audit.\n")
 
 def RunAll():
     Check_1_2_1_1()
@@ -268,7 +268,7 @@ def Check_5_4_2_5():
                     print(f"Directory {path} is not a valid path")
                 elif stat.S_IMODE(mode) > 0o755:
                     flag = True
-                    print(f"Directory {path} is overly permissive (mode = {oct(mode).split('o')[1]})")
+                    print(f"Directory {path} is overly permissive (mode = {oct(mode).split('o')[-1]})")
 
     if not flag:
         print("Audit passed for 5.4.2.5.\n")
@@ -414,7 +414,7 @@ def Check_7_1_13():
             sums = f.read()
 
         # md5sum format matches <digest>  path/to/binary 
-        # hence, slice first / off filepath when searching
+        # first / needs to be sliced off while matching
         if not re.findall(rf"{digest}\s+{file[1][1:]}", sums):
             flag = True
             print(f"md5sum does not match for {file[0]} file - {digest}: {file[1]}")
