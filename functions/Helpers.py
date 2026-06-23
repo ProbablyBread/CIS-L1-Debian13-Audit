@@ -21,11 +21,10 @@ def GetDirExclusions():
 
 def IsEOF(stream):
     currIndex = stream.tell()
-    stream.readline()
-    nextIndex = stream.tell()
+    stream.read(1) # try to read 1 char
 
     # if no more to read
-    if currIndex == nextIndex:
+    if currIndex == stream.tell():
         return True
     # if more to read
     else:
@@ -55,7 +54,7 @@ def ParseDeb822(file):
 
             # if EOF, return
             if IsEOF(f):
+                # append remaining lines if data exists
                 if len(lines) > 0:
                     stanzas[counter] = lines
-
                 return stanzas
