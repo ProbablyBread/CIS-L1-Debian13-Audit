@@ -429,6 +429,22 @@ def Check_7_2_3():
 
     flag = False
 
+    # grab all assigned groups in /etc/passwd
+    with open("/etc/passwd", 'r') as f:
+        passwd = f.readlines()
+
+    for line in passwd:
+        # use grp library to match GID
+        username = line.split(":")[0]
+        gid = line.split(":")[3]
+
+        # if GID returns no match, flag = True
+        try:
+            grp.getgrgid(int(gid))
+        except KeyError:
+            flag = True
+            print(f"{username} belongs in GID {gid} which is not a valid group.")
+
     if not flag:
         print("Audit passed for 7.2.3.\n")
     else:
@@ -439,6 +455,15 @@ def Check_7_2_4():
 
     flag = False
 
+    # grab the shadow group in /etc/shadow
+    with open("/etc/group", 'r') as f:
+        groups = f.readlines()
+
+    for g in groups:
+        if g.startswith("shadow:") and not re.match(r"^shadow:x:\d+:$", g):
+            flag = True
+            print(f"The shadow group is not empty, containing the user(s) {g.split(':')[-1]}")
+
     if not flag:
         print("Audit passed for 7.2.4.\n")
     else:
@@ -448,6 +473,25 @@ def Check_7_2_5():
     print("Running audit for 7.2.5...")
 
     flag = False
+    uids = {}
+
+    # read the entire passwd file, grab UIDs into an array
+    with open("/etc/passwd", 'r') as f:
+        passwd = f.readlines()
+
+    for line in passwd:
+        username = line.split(":")[0]
+        uid = line.split(":")[2]
+
+        if not uid in uids:
+            uids[uid] = [username]
+        else:
+            uids[uid].append(username)
+
+    for uid in uids:
+        if len(uids[uid]) > 1:
+            flag = True
+            print(f"Duplicate UID {uid} between {str(uids[uid]).strip('[]')}")
 
     if not flag:
         print("Audit passed for 7.2.5.\n")
@@ -458,6 +502,25 @@ def Check_7_2_6():
     print("Running audit for 7.2.6...")
 
     flag = False
+    gids = {}
+
+    # read the entire group file, grab GIDs into an array
+    with open("/etc/group", 'r') as f:
+        group = f.readlines()
+
+    for line in group:
+        groupname = line.split(":")[0]
+        gid = line.split(":")[2]
+
+        if not gid in gids:
+            gids[gid] = [groupname]
+        else:
+            gids[gid].append(groupname)
+
+    for gid in gids:
+        if len(gids[gid]) > 1:
+            flag = True
+            print(f"Duplicate GID {gid} between {str(gids[gid]).strip('[]')}")
 
     if not flag:
         print("Audit passed for 7.2.6.\n")
@@ -468,6 +531,20 @@ def Check_7_2_7():
     print("Running audit for 7.2.7...")
 
     flag = False
+    usernames = []
+
+    with open("/etc/passwd", 'r') as f:
+        passwd = f.readlines()
+
+    for line in passwd:
+        usernames.append(line.split(":")[0])
+
+    for u in usernames:
+        if usernames.count(u) > 1:
+            flag = True
+            print(f"Duplicate username {u}")
+            # remove from array to avoid duplicating messages
+            usernames = [a for a in usernames if a != u]
 
     if not flag:
         print("Audit passed for 7.2.7.\n")
@@ -478,6 +555,20 @@ def Check_7_2_8():
     print("Running audit for 7.2.8...")
 
     flag = False
+    groupnames = []
+
+    with open("/etc/group", 'r') as f:
+        group = f.readlines()
+
+    for line in group:
+        groupnames.append(line.split(":")[0])
+
+    for g in groupnames:
+        if groupnames.count(g) > 1:
+            flag = True
+            print(f"Duplicate groupname {g}")
+            # remove from array to avoid duplicating messages
+            groupnames = [a for a in groupnames if a != g]
 
     if not flag:
         print("Audit passed for 7.2.8.\n")
