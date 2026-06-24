@@ -405,6 +405,11 @@ def Check_7_1_13():
         dpkgSource = subprocess.run(f"dpkg -S {file[1]}", shell=True, capture_output=True).stdout.decode()
         dpkgSource = dpkgSource.split(":")[0]
 
+        #### TODO
+        # add a check here to handle when dpkg -S fails to find something
+        # for non-apt/dpkg installed SUID/SGID applications
+        #### TODO
+
         # calculate md5sum for file
         with open(file[1], 'rb') as f:
             digest = hashlib.file_digest(f, "md5").hexdigest()
