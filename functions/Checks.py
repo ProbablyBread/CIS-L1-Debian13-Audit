@@ -402,27 +402,29 @@ def Check_7_1_13():
     # loop through all files
     for file in stickyBitList:
         # get package from dpkg -S
-        dpkgSource = subprocess.run(f"dpkg -S {file[1]}", shell=True, capture_output=True).stdout.decode()
-        dpkgSource = dpkgSource.split(":")[0]
-
-        #### TODO
-        # add a check here to handle when dpkg -S fails to find something
-        # for non-apt/dpkg installed SUID/SGID applications
-        #### TODO
+        dpkgSource = subprocess.run(f"dpkg -S {file[1]}", shell=True, capture_output=True)
 
         # calculate md5sum for file
         with open(file[1], 'rb') as f:
             digest = hashlib.file_digest(f, "md5").hexdigest()
+       
+        # if file is part of a package installed with dpkg/apt
+        if dpkgSource.returncode == 0:
+            dpkgSource = dpkgSource.stdout.decode().split(":")[0]
 
-        # check against /var/lib/dpkg/info/<dpkgSource>.md5sums
-        with open(f"/var/lib/dpkg/info/{dpkgSource}.md5sums", 'r') as f:
-            sums = f.read()
+            # check against /var/lib/dpkg/info/<dpkgSource>.md5sums
+            with open(f"/var/lib/dpkg/info/{dpkgSource}.md5sums", 'r') as f:
+                sums = f.read()
 
-        # md5sum format matches <digest>  path/to/binary 
-        # first / needs to be sliced off while matching
-        if not re.findall(rf"{digest}\s+{file[1][1:]}", sums):
+            # md5sum format matches <digest>  path/to/binary 
+            # first / needs to be sliced off while matching
+            if not re.findall(rf"{digest}\s+{file[1][1:]}", sums):
+                flag = True
+                print(f"md5sum does not match for {file[0]} file - {digest}: {file[1]}")
+        # otherwise, assume malicious
+        else:
             flag = True
-            print(f"md5sum does not match for {file[0]} file - {digest}: {file[1]}")
+            print(f"Unknown {file[0]} file - {digest}: {file[1]}")
 
     if not flag:
         print("Audit passed for 7.1.13.\n")
