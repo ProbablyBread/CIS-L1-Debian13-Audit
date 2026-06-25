@@ -498,7 +498,7 @@ def Check_7_2_5():
     for uid in uids:
         if len(uids[uid]) > 1:
             flag = True
-            print(f"Duplicate UID {uid} between {str(uids[uid]).strip('[]')}")
+            print(f"Duplicate UID {uid} between {Helpers.ArrayToText(uids[uid])}")
 
     if not flag:
         print("Audit passed for 7.2.5.\n")
@@ -527,7 +527,7 @@ def Check_7_2_6():
     for gid in gids:
         if len(gids[gid]) > 1:
             flag = True
-            print(f"Duplicate GID {gid} between {str(gids[gid]).strip('[]')}")
+            print(f"Duplicate GID {gid} between {Helpers.ArrayToText(gids[gid])}")
 
     if not flag:
         print("Audit passed for 7.2.6.\n")

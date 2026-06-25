@@ -4,6 +4,24 @@ import subprocess
 import json
 import re
 
+def ArrayToText(array):
+    if len(array) == 0: 
+        return ""
+    elif len(array) == 1:
+        return array[0]
+    elif len(array) == 2:
+        return f"{array[0]} and {array[1]}"
+    else:
+        i = 0
+        s = ""
+
+        while i < len(array) - 1:
+            s += f"{array[i]}, "
+            i += 1
+
+        s += f"and {array[-1]}"
+        return s
+
 def IsEOF(stream):
     currIndex = stream.tell()
     stream.read(1) # try to read 1 char
