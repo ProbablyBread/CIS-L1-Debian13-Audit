@@ -587,7 +587,7 @@ def Check_7_2_9():
 
     flag = False
     homeDirs = Helpers.CollectInteractiveHomeDirs()
-    invalidPerms = stat.S_IRWXO + stat.S_IWGRP
+    invalidPerms = stat.S_IRWXO + stat.S_IWGRP 
 
     for user in homeDirs:
         path = homeDirs[user]
@@ -598,6 +598,7 @@ def Check_7_2_9():
         if mode == -1:
             flag = True
             print(f"Interactive user {user} has an invalid home directory of {homeDirs[user]}")
+        # check if o=rwx and g=w
         elif bool(mode.st_mode & invalidPerms):
             flag = True
             print(f"Interactive user {user} has a home directory of {homeDirs[user]} with invalid permissions ({oct(mode.st_mode).split('o')[-1]})")
@@ -615,8 +616,8 @@ def Check_7_2_10():
     # permission masks
     grpExecOrWrite = stat.S_IWGRP + stat.S_IXGRP
     othExecOrWrite = stat.S_IWOTH + stat.S_IXOTH
-    genericInvalidPerms = stat.S_IXUSR + grpExecOrWrite + othExecOrWrite
-    invalidBHPerms = stat.S_IRWXO + stat.S_IRWXG + stat.S_IXUSR
+    genericInvalidPerms = stat.S_IXUSR + grpExecOrWrite + othExecOrWrite # 0644
+    invalidBHPerms = stat.S_IRWXO + stat.S_IRWXG + stat.S_IXUSR # 0600
 
     homeDirs = Helpers.CollectInteractiveHomeDirs()
 
@@ -648,12 +649,20 @@ def Check_7_2_10():
                     # check ownership
                     elif mode.st_uid != uid.pw_uid or mode.st_gid != gid.gr_gid:
                         flag = True
-                        print(f"{filePath} is not owned by {user} (Owner: {mode.st_uid}, Group: {mode.st_gid})")
-                    # check .bash_history specifically
+                        
+                        try:
+                            modeUid = pwd.getpwuid(mode.st_uid).pw_name
+                            modeGid = grp.getgrgid(mode.st_gid).gr_name
+                        except KeyError:
+                            modeUid = mode.st_uid
+                            modeGid = mode.st_gid
+
+                        print(f"{filePath} is not owned by {user} (Owner: {modeUid}, Group: {modeGid})")
+                    # check .bash_history specifically (o=rwx, g=rwx, u=x)
                     elif file == ".bash_history" and bool(mode.st_mode & invalidBHPerms):
                         flag = True
                         print(f"{filePath} for {user} has invalid permissions ({oct(mode.st_mode).split('o')[-1]})")
-                    # all other dotfiles
+                    # all other dotfiles (o=wx, g=wx, u=x)
                     elif bool(mode.st_mode & genericInvalidPerms):
                         flag = True
                         print(f"{filePath} for {user} has invalid permissions ({oct(mode.st_mode).split('o')[-1]})")
