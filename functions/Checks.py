@@ -586,6 +586,41 @@ def Check_7_2_9():
     print("Running audit for 7.2.9...")
 
     flag = False
+    homeDirs = {}
+
+    with open("/etc/passwd", 'r') as f:
+        passwd = f.readlines()
+
+    with open("/etc/shells", 'r') as f:
+        shells = [s.strip() for s in f.readlines() if not s.startswith("#")]
+
+    for line in passwd:
+        user = line.split(":")[0].strip()
+        shell = line.split(":")[-1].strip()
+        homeDir = line.split(":")[5].strip()
+
+        if shell in shells:
+            homeDirs[user] = homeDir
+
+    for user in homeDirs:
+        path = homeDirs[user]
+
+        # checks if path exists or is an actual directory
+        if not os.path.exists(path):
+            flag = True
+            print(f"Interactive user {user} has an invalid home directory of {homeDirs[user]}")
+        else:
+            mode = os.stat(path)
+
+            # check if path is a directory
+            if not stat.S_ISDIR(mode.st_mode): 
+                flag = True
+                print(f"Interactive user {user} has an invalid home directory of {homeDirs[user]}")
+
+            # checks if path has permissions <= 750
+            elif bool(mode.st_mode & stat.S_IRWXO) or bool(mode.st_mode & stat.S_IWGRP) or not bool(mode.st_mode & stat.S_IRWXU):
+                flag = True
+                print(f"Interactive user {user} has a home directory of {homeDirs[user]} with invalid permissions")
 
     if not flag:
         print("Audit passed for 7.2.9.\n")
