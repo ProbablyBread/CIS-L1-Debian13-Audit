@@ -620,7 +620,7 @@ def Check_7_2_9():
             # checks if path has permissions <= 750
             elif bool(mode.st_mode & stat.S_IRWXO) or bool(mode.st_mode & stat.S_IWGRP) or not bool(mode.st_mode & stat.S_IRWXU):
                 flag = True
-                print(f"Interactive user {user} has a home directory of {homeDirs[user]} with invalid permissions")
+                print(f"Interactive user {user} has a home directory of {homeDirs[user]} with invalid permissions ({str(oct(mode.st_mode)).split('o')[-1]})")
 
     if not flag:
         print("Audit passed for 7.2.9.\n")
