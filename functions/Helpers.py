@@ -3,6 +3,8 @@
 import subprocess
 import json
 import re
+import os
+import stat
 
 def ArrayToText(array):
     if len(array) == 0: 
@@ -68,6 +70,36 @@ def GetDirExclusionsWithOptions():
             excludedRootDirs.add(mount["target"])
 
     return excludedRootDirs
+
+def CollectInteractiveHomeDirs():
+    homeDirs = {}
+
+    with open("/etc/passwd", 'r') as f:
+        passwd = f.readlines()
+
+    with open("/etc/shells", 'r') as f:
+        shells = [s.strip() for s in f.readlines() if not s.startswith("#")]
+
+    for line in passwd:
+        user = line.split(":")[0].strip()
+        shell = line.split(":")[-1].strip()
+        homeDir = line.split(":")[5].strip()
+
+        if shell in shells:
+            homeDirs[user] = homeDir
+
+    return homeDirs
+
+def GetMode(path):
+    try:
+        mode = os.lstat(path)
+
+        if (stat.S_ISDIR(mode.st_mode)):
+            return mode
+        else:
+            return -1
+    except FileNotFoundError:
+        return -1
 
 def ParseDeb822(file):
     counter = 0

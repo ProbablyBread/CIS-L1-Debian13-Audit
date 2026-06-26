@@ -586,41 +586,21 @@ def Check_7_2_9():
     print("Running audit for 7.2.9...")
 
     flag = False
-    homeDirs = {}
-
-    with open("/etc/passwd", 'r') as f:
-        passwd = f.readlines()
-
-    with open("/etc/shells", 'r') as f:
-        shells = [s.strip() for s in f.readlines() if not s.startswith("#")]
-
-    for line in passwd:
-        user = line.split(":")[0].strip()
-        shell = line.split(":")[-1].strip()
-        homeDir = line.split(":")[5].strip()
-
-        if shell in shells:
-            homeDirs[user] = homeDir
+    homeDirs = Helpers.CollectInteractiveHomeDirs()
+    invalidPerms = stat.S_IRWXO + stat.S_IWGRP
 
     for user in homeDirs:
         path = homeDirs[user]
 
         # checks if path exists or is an actual directory
-        if not os.path.exists(path):
+        mode = Helpers.GetMode(path)
+
+        if mode == -1:
             flag = True
             print(f"Interactive user {user} has an invalid home directory of {homeDirs[user]}")
-        else:
-            mode = os.stat(path)
-
-            # check if path is a directory
-            if not stat.S_ISDIR(mode.st_mode): 
-                flag = True
-                print(f"Interactive user {user} has an invalid home directory of {homeDirs[user]}")
-
-            # checks if path has permissions <= 750
-            elif bool(mode.st_mode & stat.S_IRWXO) or bool(mode.st_mode & stat.S_IWGRP) or not bool(mode.st_mode & stat.S_IRWXU):
-                flag = True
-                print(f"Interactive user {user} has a home directory of {homeDirs[user]} with invalid permissions ({str(oct(mode.st_mode)).split('o')[-1]})")
+        elif bool(mode.st_mode & invalidPerms):
+            flag = True
+            print(f"Interactive user {user} has a home directory of {homeDirs[user]} with invalid permissions ({oct(mode.st_mode).split('o')[-1]})")
 
     if not flag:
         print("Audit passed for 7.2.9.\n")
@@ -628,9 +608,55 @@ def Check_7_2_9():
         print("Audit failed for 7.2.9.\n")
 
 def Check_7_2_10():
-    print("Running audit for 7.1.18...")
+    print("Running audit for 7.2.10...")
 
     flag = False
+
+    # permission masks
+    grpExecOrWrite = stat.S_IWGRP + stat.S_IXGRP
+    othExecOrWrite = stat.S_IWOTH + stat.S_IXOTH
+    genericInvalidPerms = stat.S_IXUSR + grpExecOrWrite + othExecOrWrite
+    invalidBHPerms = stat.S_IRWXO + stat.S_IRWXG + stat.S_IXUSR
+
+    homeDirs = Helpers.CollectInteractiveHomeDirs()
+
+    # walk all home directories
+    for user in homeDirs:
+        path = homeDirs[user]
+        dirMode = Helpers.GetMode(path)
+
+        # checks if homedir exists or is an actual directory
+        if dirMode == -1:
+            flag = True
+            print(f"Interactive user {user} has an invalid home directory of {homeDirs[user]}")
+        else:
+            for path, dirNames, fileNames in os.walk(homeDirs[user], topdown=True):
+                # only grab dotfiles and skip to next loop if no dotfiles
+                fileNames = [file for file in fileNames if file.startswith(".")]
+                if len(fileNames) == 0:
+                    continue
+
+                for file in fileNames:
+                    filePath = os.path.join(path, file)
+                    mode = os.stat(filePath)
+                    uid = pwd.getpwnam(user)
+                    gid = grp.getgrgid(uid.pw_gid)
+
+                    # skip all .forward, .rhost, and .netrc files
+                    if file == ".forward" or file == ".rhost" or file == ".netrc":
+                        print(f"WARNING: {file} exists for {user}")
+                    # check ownership
+                    elif mode.st_uid != uid.pw_uid or mode.st_gid != gid.gr_gid:
+                        flag = True
+                        print(f"{filePath} is not owned by {user} (Owner: {mode.st_uid}, Group: {mode.st_gid})")
+                    # check .bash_history specifically
+                    elif file == ".bash_history" and bool(mode.st_mode & invalidBHPerms):
+                        flag = True
+                        print(f"{filePath} for {user} has invalid permissions ({oct(mode.st_mode).split('o')[-1]})")
+                    # all other dotfiles
+                    elif bool(mode.st_mode & genericInvalidPerms):
+                        flag = True
+                        print(f"{filePath} for {user} has invalid permissions ({oct(mode.st_mode).split('o')[-1]})")
 
     if not flag:
         print("Audit passed for 7.2.10.\n")
